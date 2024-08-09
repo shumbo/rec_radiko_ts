@@ -467,6 +467,7 @@ duration=
 url=
 mail="${RADIKO_MAIL:-}"
 password="${RADIKO_PASSWORD:-}"
+authtoken=
 output=
 
 # Argument none?
@@ -476,7 +477,7 @@ if [ $# -lt 1 ]; then
 fi
 
 # Parse argument
-while getopts s:f:t:d:m:u:p:o:l option; do
+while getopts s:f:t:d:m:u:p:x:o:l option; do
   case "${option}" in
     s)
       station_id="${OPTARG}"
@@ -498,6 +499,9 @@ while getopts s:f:t:d:m:u:p:o:l option; do
       ;;
     p)
       password="${OPTARG}"
+      ;;
+    x)
+      authtoken="${OPTARG}"
       ;;
     o)
       output="${OPTARG}"
@@ -628,28 +632,29 @@ if [ -n "${mail}" ]; then
   done
 fi
 
-# Authorize
-authtoken=
-area_id=
-i=1
-while : ; do
-  # Max 3 times
-  if res=$(radiko_auth "${radiko_session}") ; then
-    # Success
-    authtoken=$(echo "${res}" | cut -d ',' -f1)
-    area_id=$(echo "${res}" | cut -d ',' -f2)
-    break
-  fi
+# Authorize (skip if token already provided via -x)
+if [ -z "${authtoken}" ]; then
+  area_id=
+  i=1
+  while : ; do
+    # Max 3 times
+    if res=$(radiko_auth "${radiko_session}") ; then
+      # Success
+      authtoken=$(echo "${res}" | cut -d ',' -f1)
+      area_id=$(echo "${res}" | cut -d ',' -f2)
+      break
+    fi
 
-  i=$((i + 1))
-  if [ ${i} -gt 3 ]; then
-    echo 'auth failed' >&2
-    radiko_logout "${radiko_session}"
-    exit 1
-  fi
+    i=$((i + 1))
+    if [ ${i} -gt 3 ]; then
+      echo 'auth failed' >&2
+      radiko_logout "${radiko_session}"
+      exit 1
+    fi
 
-  sleep 5
-done
+    sleep 5
+  done
+fi
 
 # Generate default file path
 if [ -z "${output}" ]; then
