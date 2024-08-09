@@ -22,6 +22,7 @@ $ ./rec_radiko_ts.sh [options]
 |-u _URL_||番組URL|ラジコサイトの番組表から番組詳細ページへ移動したあとのURLを元に `-s` `-f` `-t` の値を自動で取得する|
 |-m _MAIL_||ラジコプレミアム メールアドレス||
 |-p _PASSWORD_||ラジコプレミアム パスワード||
+|-x _TOKEN_||トークン||
 |-o _PATH_||出力パス|未指定の場合カレントディレクトリに `放送局ID_開始日時_終了日時.m4a` というファイルを作成|
 
 <a id="param_note1" name="param_note1">*1</a> http://radiko.jp/v3/station/region/full.xml のIDと同じ。  

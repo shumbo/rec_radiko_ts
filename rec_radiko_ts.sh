@@ -294,6 +294,7 @@ duration=
 url=
 mail=
 password=
+authtoken=
 output=
 
 # Argument none?
@@ -304,7 +305,7 @@ if [ $# -lt 1 ]; then
 fi
 
 # Parse argument
-while getopts s:f:t:d:m:u:p:o: option; do
+while getopts s:f:t:d:m:u:p:x:o: option; do
   case "${option}" in
     s)
       station_id="${OPTARG}"
@@ -326,6 +327,9 @@ while getopts s:f:t:d:m:u:p:o: option; do
       ;;
     p)
       password="${OPTARG}"
+      ;;
+    x)
+      authtoken="${OPTARG}"
       ;;
     o)
       output="${OPTARG}"
@@ -433,49 +437,52 @@ if [ -n "${mail}" ]; then
   fi
 fi
 
-# Authorize 1
-auth1_res=$(curl \
-    --silent \
-    --header "X-Radiko-App: pc_html5" \
-    --header "X-Radiko-App-Version: 0.0.1" \
-    --header "X-Radiko-Device: pc" \
-    --header "X-Radiko-User: dummy_user" \
-    --dump-header - \
-    --output /dev/null \
-    "https://radiko.jp/v2/api/auth1")
+# if authtoken is not set, generate it
+if [ -z "${authtoken}" ]; then
+  # Authorize 1
+  auth1_res=$(curl \
+      --silent \
+      --header "X-Radiko-App: pc_html5" \
+      --header "X-Radiko-App-Version: 0.0.1" \
+      --header "X-Radiko-Device: pc" \
+      --header "X-Radiko-User: dummy_user" \
+      --dump-header - \
+      --output /dev/null \
+      "https://radiko.jp/v2/api/auth1")
 
-# Get partial key
-authtoken=$(echo "${auth1_res}" | awk 'tolower($0) ~/^x-radiko-authtoken: / {print substr($0,21,length($0)-21)}')
-keyoffset=$(echo "${auth1_res}" | awk 'tolower($0) ~/^x-radiko-keyoffset: / {print substr($0,21,length($0)-21)}')
-keylength=$(echo "${auth1_res}" | awk 'tolower($0) ~/^x-radiko-keylength: / {print substr($0,21,length($0)-21)}')
+  # Get partial key
+  authtoken=$(echo "${auth1_res}" | awk 'tolower($0) ~/^x-radiko-authtoken: / {print substr($0,21,length($0)-21)}')
+  keyoffset=$(echo "${auth1_res}" | awk 'tolower($0) ~/^x-radiko-keyoffset: / {print substr($0,21,length($0)-21)}')
+  keylength=$(echo "${auth1_res}" | awk 'tolower($0) ~/^x-radiko-keylength: / {print substr($0,21,length($0)-21)}')
 
-if [ -z "${authtoken}" ] || [ -z "${keyoffset}" ] || [ -z "${keylength}" ]; then
-  echo "auth1 failed" >&2
-  finalize
-  exit 1
-fi
+  if [ -z "${authtoken}" ] || [ -z "${keyoffset}" ] || [ -z "${keylength}" ]; then
+    echo "auth1 failed" >&2
+    finalize
+    exit 1
+  fi
 
-partialkey=$(echo "${AUTHKEY_VALUE}" | dd bs=1 "skip=${keyoffset}" "count=${keylength}" 2> /dev/null | base64)
+  partialkey=$(echo "${AUTHKEY_VALUE}" | dd bs=1 "skip=${keyoffset}" "count=${keylength}" 2> /dev/null | base64)
 
-# Authorize 2
-auth2_url_param=""
-if [ -n "${radiko_session}" ]; then
-  auth2_url_param="?radiko_session=${radiko_session}"
-fi
-curl \
-    --silent \
-    --header "X-Radiko-Device: pc" \
-    --header "X-Radiko-User: dummy_user" \
-    --header "X-Radiko-AuthToken: ${authtoken}" \
-    --header "X-Radiko-PartialKey: ${partialkey}" \
-    --output /dev/null \
-    "https://radiko.jp/v2/api/auth2${auth2_url_param}"
-ret=$?
+  # Authorize 2
+  auth2_url_param=""
+  if [ -n "${radiko_session}" ]; then
+    auth2_url_param="?radiko_session=${radiko_session}"
+  fi
+  curl \
+      --silent \
+      --header "X-Radiko-Device: pc" \
+      --header "X-Radiko-User: dummy_user" \
+      --header "X-Radiko-AuthToken: ${authtoken}" \
+      --header "X-Radiko-PartialKey: ${partialkey}" \
+      --output /dev/null \
+      "https://radiko.jp/v2/api/auth2${auth2_url_param}"
+  ret=$?
 
-if [ ${ret} -ne 0 ]; then
-  echo "auth2 failed" >&2
-  finalize
-  exit 1
+  if [ ${ret} -ne 0 ]; then
+    echo "auth2 failed" >&2
+    finalize
+    exit 1
+  fi
 fi
 
 # Generate default file path
